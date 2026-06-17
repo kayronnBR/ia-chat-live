@@ -54,8 +54,8 @@
         const chatMessages = document.getElementById('chat-messages');
         const btnStart = document.getElementById('btn-start');
 
-        // Variável de controle
-        let isListening = false;
+        // VARIÁVEL DE CONTROLE PARA O AUTO-RESTART
+        let userManualStop = false; 
 
         if (GEMINI_API_KEY) modal.style.display = 'none';
 
@@ -72,39 +72,40 @@
         recognition.continuous = true;
         recognition.lang = 'pt-BR';
 
-        // Função principal agora funciona como um interruptor
+        // --- LÓGICA DE AUTO-RESTART ---
+        recognition.onend = () => {
+            if (!userManualStop) {
+                // Se o navegador parou sozinho (silêncio/timeout), reinicia
+                recognition.start();
+            } else {
+                // Se o usuário clicou em parar, atualiza a UI
+                statusText.innerText = "Parado.";
+                btnStart.innerText = "Iniciar Escuta";
+                btnStart.style.backgroundColor = "#9146FF";
+            }
+        };
+
         function iniciarEscuta() {
             if (!GEMINI_API_KEY) {
                 alert("Configure a API primeiro!");
                 return;
             }
 
-            if (isListening) {
-                // Se já estiver escutando, para
+            // Verifica se já está escutando
+            if (btnStart.innerText === "Parar Escuta") {
+                userManualStop = true;
                 recognition.stop();
             } else {
-                // Se não estiver, inicia
+                userManualStop = false;
                 recognition.start();
+                statusText.innerText = "Escutando... 🎙️";
+                btnStart.innerText = "Parar Escuta";
+                btnStart.style.backgroundColor = "#ff4500";
             }
         }
 
-        // Feedback visual quando o reconhecimento liga
-        recognition.onstart = () => {
-            isListening = true;
-            statusText.innerText = "Escutando... 🎙️";
-            btnStart.innerText = "Parar Escuta";
-            btnStart.style.backgroundColor = "#ff4500"; // Muda para cor de "parar"
-        };
-
-        // Feedback visual quando o reconhecimento desliga
-        recognition.onend = () => {
-            isListening = false;
-            statusText.innerText = "Parado.";
-            btnStart.innerText = "Iniciar Escuta";
-            btnStart.style.backgroundColor = "#9146FF"; // Volta para cor original
-        };
-
         recognition.onresult = async (event) => {
+            // Pega o resultado mais recente
             const transcript = event.results[event.results.length - 1][0].transcript.trim();
             if (transcript.length > 3) {
                 await gerarReacaoChat(transcript);
@@ -134,7 +135,7 @@
                 });
             } catch (err) {
                 console.error("Erro na API:", err);
-                statusText.innerText = "Erro na API. Verifique a chave.";
+                statusText.innerText = "Erro na API.";
             }
         }
     </script>
