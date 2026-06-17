@@ -139,10 +139,12 @@
 
 <script>
 // ─── Estado global ──────────────────────────────────────────────
-let GEMINI_API_KEY = localStorage.getItem('GEMINI_API_KEY');
-let escutando      = false;
-let processando    = false;
-const MAX_MSGS     = 80; // limite de mensagens no chat
+let GEMINI_API_KEY  = localStorage.getItem('GEMINI_API_KEY');
+let escutando       = false;
+let processando     = false;
+let reconhecendo    = false; // true enquanto o objeto recognition está ativo
+let restartTimer    = null;  // timer para reinício com delay
+const MAX_MSGS      = 80;
 
 // ─── Elementos ─────────────────────────────────────────────────
 const modal        = document.getElementById('config-modal');
@@ -176,26 +178,40 @@ recognition.lang        = 'pt-BR';
 recognition.interimResults = false; // só resultados finais
 
 recognition.onstart = () => {
+    reconhecendo = true;
     console.log('[Mic] Ligado');
     statusText.innerText = '🎙️ Escutando...';
 };
 
 recognition.onend = () => {
-    // Reinicia automaticamente a menos que o usuário tenha parado
-    if (escutando) {
-        console.log('[Mic] Reiniciando...');
-        recognition.start();
-    } else {
+    reconhecendo = false;
+    if (!escutando) {
         statusText.innerText = 'Parado.';
+        return;
     }
+    // Reinicia com delay para evitar o loop de erro "network"
+    console.log('[Mic] Reiniciando em 800ms...');
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(() => {
+        if (escutando && !reconhecendo) {
+            try { recognition.start(); } catch(e) { console.warn('[Mic] Não foi possível reiniciar:', e); }
+        }
+    }, 800);
 };
 
 recognition.onerror = (event) => {
-    console.error('[Mic] Erro:', event.error);
-    // "no-speech" é normal; outros erros merecem aviso
-    if (event.error !== 'no-speech') {
-        statusText.innerText = '⚠️ Erro no microfone: ' + event.error;
-    }
+    reconhecendo = false;
+    console.warn('[Mic] Erro:', event.error);
+
+    // Erros recuperáveis — silenciosos, o onend já vai reiniciar
+    const errosRecuperaveis = ['no-speech', 'network', 'audio-capture'];
+    if (errosRecuperaveis.includes(event.error)) return;
+
+    // Erros fatais
+    statusText.innerText = '⚠️ Erro no microfone: ' + event.error;
+    escutando = false;
+    btnStart.textContent = '▶ Iniciar Escuta';
+    btnStart.classList.remove('parar');
 };
 
 recognition.onresult = async (event) => {
@@ -220,16 +236,19 @@ function toggleEscuta() {
     if (escutando) {
         // Parar
         escutando = false;
-        recognition.stop();
+        clearTimeout(restartTimer);
+        try { recognition.stop(); } catch(e) {}
         btnStart.textContent = '▶ Iniciar Escuta';
         btnStart.classList.remove('parar');
         statusText.innerText = 'Parado.';
     } else {
-        // Iniciar
+        // Iniciar — só chama .start() se não estiver já rodando
         escutando = true;
-        recognition.start();
         btnStart.textContent = '■ Parar Escuta';
         btnStart.classList.add('parar');
+        if (!reconhecendo) {
+            try { recognition.start(); } catch(e) { console.warn('[Mic] Erro ao iniciar:', e); }
+        }
     }
 }
 
