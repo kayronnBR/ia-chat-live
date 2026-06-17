@@ -6,7 +6,6 @@
     <title>Chat IA para Streamers</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-
         *, *::before, *::after { box-sizing: border-box; }
 
         body, html {
@@ -21,64 +20,53 @@
             border-right: 1px solid #2f2f35;
         }
 
-        /* --- Cabeçalho --- */
         #chat-header {
-            background: #0E0E10;
-            padding: 10px 12px;
+            background: #0E0E10; padding: 10px 12px;
             border-bottom: 1px solid #2f2f35;
             display: flex; align-items: center; gap: 8px;
         }
         #chat-header .dot {
             width: 8px; height: 8px; border-radius: 50%;
             background: #9146FF; flex-shrink: 0;
+            transition: background 0.3s;
         }
-        #chat-header span { font-size: 13px; font-weight: 600; color: #EFEFF1; }
+        #chat-header .dot.ativo { background: #ff4d4d; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        #chat-header span { font-size: 13px; font-weight: 600; }
 
-        /* --- Mensagens --- */
         #chat-messages {
             flex: 1; padding: 10px 12px;
             display: flex; flex-direction: column;
-            justify-content: flex-end;
-            overflow-y: auto; gap: 4px;
+            justify-content: flex-end; overflow-y: auto; gap: 4px;
         }
-
         .message { animation: fadeIn 0.3s; word-wrap: break-word; font-size: 14px; line-height: 1.4; }
         .username { font-weight: 600; margin-right: 4px; }
-
-        /* Mensagem de sistema/IA carregando */
         .message.loading { opacity: 0.5; font-style: italic; font-size: 12px; color: #adadb8; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
+        #chat-footer { background: #0E0E10; padding: 10px 12px; border-top: 1px solid #2f2f35; }
+        #status { font-size: 11px; margin-bottom: 8px; color: #adadb8; min-height: 16px; }
 
-        /* --- Rodapé --- */
-        #chat-footer {
-            background: #0E0E10;
-            padding: 10px 12px;
-            border-top: 1px solid #2f2f35;
-        }
-        #status {
-            font-size: 11px; margin-bottom: 8px;
-            color: #adadb8; min-height: 16px;
-        }
         #btn-start {
-            width: 100%; padding: 10px;
-            background: #9146FF; color: white;
-            border: none; cursor: pointer;
-            border-radius: 4px; font-weight: bold;
-            font-size: 13px; transition: background 0.2s;
+            width: 100%; padding: 10px; background: #9146FF; color: white;
+            border: none; cursor: pointer; border-radius: 4px;
+            font-weight: bold; font-size: 13px; transition: background 0.2s;
         }
-        #btn-start:hover  { background: #772CE8; }
-        #btn-start.parar  { background: #EB0400; }
+        #btn-start:hover { background: #772CE8; }
+        #btn-start.parar { background: #EB0400; }
         #btn-start.parar:hover { background: #b50300; }
         #btn-start:disabled { background: #3a3a45; cursor: not-allowed; color: #adadb8; }
 
-        /* --- Modal --- */
+        /* Volume meter */
+        #volume-bar-wrap {
+            height: 4px; background: #2f2f35; border-radius: 2px;
+            margin-bottom: 8px; overflow: hidden; display: none;
+        }
+        #volume-bar { height: 100%; width: 0%; background: #9146FF; transition: width 0.1s; }
+        #volume-bar-wrap.ativo { display: block; }
+
         #config-modal {
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,0.95);
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95);
             display: flex; align-items: center; justify-content: center; z-index: 100;
         }
         .modal-content {
@@ -93,16 +81,13 @@
             background: #18181B; color: white; font-size: 14px;
         }
         .modal-content button {
-            width: 100%; padding: 10px;
-            background: #9146FF; color: white;
-            border: none; cursor: pointer;
-            border-radius: 4px; font-weight: bold;
-            font-size: 14px; transition: background 0.2s;
+            width: 100%; padding: 10px; background: #9146FF; color: white;
+            border: none; cursor: pointer; border-radius: 4px;
+            font-weight: bold; font-size: 14px; transition: background 0.2s;
         }
         .modal-content button:hover { background: #772CE8; }
         a { color: #BF94FF; text-decoration: none; }
 
-        /* Scrollbar discreta */
         #chat-messages::-webkit-scrollbar { width: 4px; }
         #chat-messages::-webkit-scrollbar-track { background: transparent; }
         #chat-messages::-webkit-scrollbar-thumb { background: #3a3a45; border-radius: 2px; }
@@ -110,7 +95,6 @@
 </head>
 <body>
 
-<!-- Modal de configuração da API -->
 <div id="config-modal">
     <div class="modal-content">
         <h3>Configurar IA</h3>
@@ -122,237 +106,236 @@
     </div>
 </div>
 
-<!-- Chat principal -->
 <div id="chat-container">
     <div id="chat-header">
-        <div class="dot"></div>
+        <div class="dot" id="dot"></div>
         <span>Chat IA – Streamer</span>
     </div>
-
     <div id="chat-messages"></div>
-
     <div id="chat-footer">
         <div id="status">Aguardando...</div>
+        <div id="volume-bar-wrap"><div id="volume-bar"></div></div>
         <button id="btn-start" onclick="toggleEscuta()">▶ Iniciar Escuta</button>
     </div>
 </div>
 
 <script>
-// ─── Estado global ──────────────────────────────────────────────
-let GEMINI_API_KEY  = localStorage.getItem('GEMINI_API_KEY');
-let escutando       = false;
-let processando     = false;
-let reconhecendo    = false; // true enquanto o objeto recognition está ativo
-let restartTimer    = null;  // timer para reinício com delay
-const MAX_MSGS      = 80;
+// ─── Estado ────────────────────────────────────────────────────
+let GEMINI_API_KEY = localStorage.getItem('GEMINI_API_KEY');
+let escutando      = false;
+let processando    = false;
+const MAX_MSGS     = 80;
+
+// MediaRecorder
+let mediaStream    = null;
+let mediaRecorder  = null;
+let audioChunks    = [];
+let cicloTimer     = null;
+
+// AudioContext para volume meter
+let audioCtx       = null;
+let analyser       = null;
+let volumeTimer    = null;
 
 // ─── Elementos ─────────────────────────────────────────────────
-const modal        = document.getElementById('config-modal');
-const statusText   = document.getElementById('status');
-const chatMessages = document.getElementById('chat-messages');
-const btnStart     = document.getElementById('btn-start');
+const modal       = document.getElementById('config-modal');
+const statusText  = document.getElementById('status');
+const chatMsgs    = document.getElementById('chat-messages');
+const btnStart    = document.getElementById('btn-start');
+const dot         = document.getElementById('dot');
+const volumeWrap  = document.getElementById('volume-bar-wrap');
+const volumeBar   = document.getElementById('volume-bar');
 
-// Esconde modal se já tem chave salva
 if (GEMINI_API_KEY) modal.style.display = 'none';
+
+function log(msg) { statusText.innerText = msg; console.log(msg); }
 
 // ─── Salvar API Key ────────────────────────────────────────────
 function salvarAPI() {
     const key = document.getElementById('api-input').value.trim();
-    if (key) {
-        localStorage.setItem('GEMINI_API_KEY', key);
-        location.reload();
-    }
+    if (key) { localStorage.setItem('GEMINI_API_KEY', key); location.reload(); }
 }
 
-// ─── Speech Recognition ───────────────────────────────────────
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-if (!SpeechRecognition) {
-    statusText.innerText = '⚠️ Navegador não suporta microfone. Use o Chrome.';
-    btnStart.disabled = true;
+// ─── Volume meter ──────────────────────────────────────────────
+function iniciarVolumeMeter(stream) {
+    try {
+        audioCtx  = new AudioContext();
+        analyser  = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        const src = audioCtx.createMediaStreamSource(stream);
+        src.connect(analyser);
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        volumeWrap.classList.add('ativo');
+        volumeTimer = setInterval(() => {
+            analyser.getByteFrequencyData(buf);
+            const avg = buf.reduce((a,b) => a+b, 0) / buf.length;
+            volumeBar.style.width = Math.min(100, avg * 2) + '%';
+            volumeBar.style.background = avg > 30 ? '#43E97B' : '#9146FF';
+        }, 80);
+    } catch(e) { /* volume meter é opcional */ }
 }
 
-let recognition    = null;
-let ultimoInterim  = ''; // guarda o texto parcial mais recente
-
-function log(msg) {
-    // Mostra no status E no console
-    console.log(msg);
-    statusText.innerText = msg;
+function pararVolumeMeter() {
+    clearInterval(volumeTimer);
+    volumeWrap.classList.remove('ativo');
+    if (audioCtx) { audioCtx.close(); audioCtx = null; }
 }
 
-function criarRecognition() {
-    const r = new SpeechRecognition();
-    r.continuous      = false;
-    r.lang            = 'pt-BR';
-    r.interimResults  = true;  // ← CRÍTICO: captura texto enquanto fala, antes do "network"
-    r.maxAlternatives = 1;
+// ─── Gravar um ciclo de áudio (3 segundos) ────────────────────
+function gravarCiclo() {
+    if (!escutando || !mediaStream) return;
 
-    r.onstart = () => {
-        reconhecendo = true;
-        ultimoInterim = '';
-        log('🎙️ Escutando... (fale agora)');
+    audioChunks = [];
+    const mimeType = getSupportedMime();
+    mediaRecorder = new MediaRecorder(mediaStream, { mimeType });
+
+    mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunks.push(e.data);
     };
 
-    r.onresult = (event) => {
-        let interimText = '';
-        let finalText   = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const txt = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-                finalText += txt;
-            } else {
-                interimText += txt;
-            }
-        }
-
-        // Mostra o que está sendo captado em tempo real
-        if (interimText) {
-            ultimoInterim = interimText;
-            log('🎙️ "' + interimText + '"');
-        }
-
-        // Texto final confirmado → envia para IA
-        if (finalText.trim().length > 3 && !processando) {
-            ultimoInterim = '';
-            log('✅ Captou: "' + finalText.trim() + '"');
-            gerarReacaoChat(finalText.trim());
-        }
-    };
-
-    r.onerror = (event) => {
-        console.warn('[Mic] Erro:', event.error);
-
-        // Se tínhamos texto parcial quando o erro veio, usa ele
-        if ((event.error === 'network' || event.error === 'no-speech') && ultimoInterim.trim().length > 3 && !processando) {
-            const textoSalvo = ultimoInterim.trim();
-            ultimoInterim = '';
-            log('⚡ Usando texto parcial: "' + textoSalvo + '"');
-            gerarReacaoChat(textoSalvo);
-            return;
-        }
-
-        const normais = ['no-speech', 'network'];
-        if (!normais.includes(event.error)) {
-            log('⚠️ Erro: ' + event.error);
-            pararEscuta();
-        }
-    };
-
-    r.onend = () => {
-        reconhecendo = false;
+    mediaRecorder.onstop = async () => {
         if (!escutando) return;
-        restartTimer = setTimeout(() => {
-            if (escutando && !processando) {
-                recognition = criarRecognition();
-                try { recognition.start(); } catch(e) { log('⚠️ Erro ao reiniciar: ' + e.message); }
-            } else if (escutando && processando) {
-                // Aguarda a IA terminar antes de reiniciar o mic
-                const aguardar = setInterval(() => {
-                    if (!processando) {
-                        clearInterval(aguardar);
-                        if (escutando) {
-                            recognition = criarRecognition();
-                            try { recognition.start(); } catch(e) {}
-                        }
-                    }
-                }, 200);
-            }
-        }, 400);
+        const blob = new Blob(audioChunks, { type: mimeType });
+        // Só processa se tiver áudio suficiente (> 3KB = provavelmente tem fala)
+        if (blob.size > 3000 && !processando) {
+            await processarAudio(blob, mimeType);
+        }
+        // Próximo ciclo
+        if (escutando) cicloTimer = setTimeout(gravarCiclo, 200);
     };
 
-    return r;
-}
-
-// ─── Controle de escuta ────────────────────────────────────────
-function pararEscuta() {
-    escutando = false;
-    clearTimeout(restartTimer);
-    if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
-    btnStart.textContent = '▶ Iniciar Escuta';
-    btnStart.classList.remove('parar');
-    statusText.innerText = 'Parado.';
-}
-
-// ─── Alternar escuta (botão) ───────────────────────────────────
-function toggleEscuta() {
-    if (!GEMINI_API_KEY) { modal.style.display = 'flex'; return; }
-
-    if (escutando) {
-        pararEscuta();
-    } else {
-        escutando = true;
-        btnStart.textContent = '■ Parar Escuta';
-        btnStart.classList.add('parar');
-        recognition = criarRecognition();
-        try {
-            recognition.start();
-        } catch(e) {
-            log('⚠️ Não foi possível iniciar: ' + e.message);
-            pararEscuta();
+    mediaRecorder.start();
+    // Para após 3 segundos → processa → começa próximo ciclo
+    cicloTimer = setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
         }
-    }
+    }, 3000);
 }
 
-// ─── Gerar reação via Gemini ───────────────────────────────────
-async function gerarReacaoChat(texto) {
-    processando = true;
-    btnStart.disabled = true;
+function getSupportedMime() {
+    const tipos = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg'];
+    return tipos.find(t => MediaRecorder.isTypeSupported(t)) || 'audio/webm';
+}
 
-    // Mensagem de loading temporária
+// ─── Enviar áudio para Gemini (transcrição + reação) ──────────
+async function processarAudio(blob, mimeType) {
+    processando = true;
+    log('🤖 Processando fala...');
     const loadingMsg = adicionarMensagem('Sistema', 'IA pensando...', '#adadb8', true);
 
     try {
-        const prompt = `Você é um bot de chat de live na Twitch. 
-        O streamer disse: "${texto}".
-        Reaja com 1 ou 2 mensagens curtas de chat, no estilo de espectadores, com emoções e emojis.
-        Responda APENAS com as mensagens separadas por | (pipe), sem explicações.
-        Exemplo: Boa jogo! 😂 | kkkk isso foi insano 🔥`;
+        // Converte blob → base64
+        const base64 = await blobParaBase64(blob);
+        // Extrai só o dado (remove "data:...;base64,")
+        const audioData = base64.split(',')[1];
 
+        // Gemini Flash aceita áudio diretamente
         const res = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { maxOutputTokens: 100, temperature: 1.0 }
+                    contents: [{
+                        parts: [
+                            {
+                                inline_data: {
+                                    mime_type: mimeType.split(';')[0], // ex: "audio/webm"
+                                    data: audioData
+                                }
+                            },
+                            {
+                                text: `Este é um trecho de áudio de uma live de streaming.
+Primeiro transcreva o que foi dito. Se não houver fala clara, responda apenas "SILENCIO".
+Se houver fala, reaja com 1 ou 2 mensagens curtas no estilo de chat de espectadores da Twitch, com emojis.
+Formato da resposta: msg1 | msg2
+Não inclua a transcrição na resposta final, apenas as mensagens de chat.`
+                            }
+                        ]
+                    }],
+                    generationConfig: { maxOutputTokens: 120, temperature: 1.1 }
                 })
             }
         );
 
         const data = await res.json();
-
-        // Remove loading
         loadingMsg.remove();
 
         if (data.error) {
-            console.error('[API] Erro:', data.error.message);
-            statusText.innerText = '⚠️ Erro API: ' + data.error.code;
+            log('⚠️ Erro API: ' + data.error.message);
             return;
         }
 
-        const resposta  = data.candidates[0].content.parts[0].text.trim();
-        const mensagens = resposta.split('|').map(m => m.trim()).filter(m => m.length > 0);
+        const resposta = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 
-        // Nomes de espectadores fake para variar
-        const nomes = ['Streamer_Fan99', 'xX_Gamer_Xx', 'PogChamp42', 'CoolViewer', 'kkkBR', 'TwitchBro'];
+        if (!resposta || resposta.toUpperCase().includes('SILENCIO') || resposta.length < 2) {
+            return; // sem fala detectada, não mostra nada
+        }
+
+        const mensagens = resposta.split('|').map(m => m.trim()).filter(m => m.length > 1);
+        const nomes = ['Streamer_Fan99', 'xX_Gamer_Xx', 'PogChamp42', 'CoolViewer', 'kkkBR', 'TwitchBro', 'lurker123', 'HypeMax'];
 
         mensagens.forEach((m, i) => {
             const nome = nomes[Math.floor(Math.random() * nomes.length)];
-            const cor  = gerarCorAleatoria();
-            setTimeout(() => adicionarMensagem(nome, m, cor), i * 400);
+            const cor  = gerarCor();
+            setTimeout(() => adicionarMensagem(nome, m, cor), i * 500);
         });
 
     } catch (err) {
         loadingMsg.remove();
-        console.error('[API] Erro fatal:', err);
-        statusText.innerText = '⚠️ Erro de conexão.';
+        log('⚠️ Erro de conexão: ' + err.message);
+        console.error(err);
     } finally {
         processando = false;
+        if (escutando) log('🎙️ Escutando...');
+    }
+}
+
+function blobParaBase64(blob) {
+    return new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload  = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(blob);
+    });
+}
+
+// ─── Iniciar / Parar ───────────────────────────────────────────
+async function toggleEscuta() {
+    if (!GEMINI_API_KEY) { modal.style.display = 'flex'; return; }
+
+    if (escutando) {
+        // PARAR
+        escutando = false;
+        clearTimeout(cicloTimer);
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+        pararVolumeMeter();
+        dot.classList.remove('ativo');
+        btnStart.textContent = '▶ Iniciar Escuta';
+        btnStart.classList.remove('parar');
+        log('Parado.');
+    } else {
+        // INICIAR — pede permissão do microfone aqui
+        log('🔐 Solicitando microfone...');
+        btnStart.disabled = true;
+        try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        } catch (e) {
+            log('⚠️ Permissão negada: ' + e.message);
+            btnStart.disabled = false;
+            return;
+        }
+
+        escutando = true;
         btnStart.disabled = false;
-        if (escutando) statusText.innerText = '🎙️ Escutando...';
+        btnStart.textContent = '■ Parar Escuta';
+        btnStart.classList.add('parar');
+        dot.classList.add('ativo');
+        log('🎙️ Escutando...');
+        iniciarVolumeMeter(mediaStream);
+        gravarCiclo();
     }
 }
 
@@ -360,26 +343,19 @@ async function gerarReacaoChat(texto) {
 function adicionarMensagem(usuario, texto, cor = '#9146FF', isLoading = false) {
     const div = document.createElement('div');
     div.className = 'message' + (isLoading ? ' loading' : '');
-    div.innerHTML = `<span class="username" style="color:${cor}">${escapeHtml(usuario)}:</span> ${escapeHtml(texto)}`;
-    chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    // Limitar histórico
-    while (chatMessages.children.length > MAX_MSGS) {
-        chatMessages.removeChild(chatMessages.firstChild);
-    }
-
+    div.innerHTML = `<span class="username" style="color:${cor}">${esc(usuario)}:</span> ${esc(texto)}`;
+    chatMsgs.appendChild(div);
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
+    while (chatMsgs.children.length > MAX_MSGS) chatMsgs.removeChild(chatMsgs.firstChild);
     return div;
 }
 
-function escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// Cores vibrantes para usuários (estilo Twitch)
-function gerarCorAleatoria() {
-    const cores = ['#FF7F50','#9146FF','#00B5AD','#F7971E','#56CCF2',
-                   '#FF6B9D','#43E97B','#FA709A','#4FACFE','#F093FB'];
+function gerarCor() {
+    const cores = ['#FF7F50','#9146FF','#00B5AD','#F7971E','#56CCF2','#FF6B9D','#43E97B','#FA709A','#4FACFE','#F093FB'];
     return cores[Math.floor(Math.random() * cores.length)];
 }
 </script>
