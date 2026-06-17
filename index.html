@@ -2,16 +2,16 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Chat IA (OpenAI) para Streamers</title>
+    <title>Chat IA para Streamers</title>
     <style>
         body { background-color: #18181B; color: #EFEFF1; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
         #chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
         #chat-footer { background: #0E0E10; padding: 15px; border-top: 1px solid #2f2f35; }
-        .message { font-size: 14px; }
+        .message { font-size: 14px; padding: 5px; border-bottom: 1px solid #2f2f35; }
         .username { font-weight: bold; margin-right: 5px; }
-        button { width: 100%; padding: 12px; background: #9146FF; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button { width: 100%; padding: 12px; background: #9146FF; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
         input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; background: #26262c; color: white; border: 1px solid #3a3a45; }
-        a { color: #BF94FF; text-decoration: none; font-size: 13px; }
+        a { color: #BF94FF; }
     </style>
 </head>
 <body>
@@ -19,18 +19,15 @@
 <div id="config-modal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 100;">
     <div style="background: #26262c; padding: 25px; border-radius: 8px; width: 300px; text-align: center;">
         <h3>Configurar OpenAI</h3>
-        <p style="font-size: 12px; color: #adadb8; margin-bottom: 15px;">
-            Obtenha sua chave em: <br>
-            <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
-        </p>
+        <p style="font-size: 12px;">Chave em: <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></p>
         <input type="password" id="api-input" placeholder="Cole sua API Key (sk-...)">
-        <button onclick="salvarAPI()">Salvar e Iniciar</button>
+        <button onclick="salvarAPI()">Salvar</button>
     </div>
 </div>
 
 <div id="chat-messages"></div>
 <div id="chat-footer">
-    <div id="status" style="font-size: 12px; color: #adadb8; margin-bottom: 5px;">Aguardando...</div>
+    <div id="status" style="font-size: 12px; color: #adadb8;">Pressione para iniciar</div>
     <button id="btn-start" onclick="toggleEscuta()">▶ Iniciar Escuta</button>
 </div>
 
@@ -38,12 +35,12 @@
     let API_KEY = localStorage.getItem('OPENAI_API_KEY');
     let escutando = false;
 
+    // Configuração da Web Speech API
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
     recognition.continuous = true;
-
-    const statusText = document.getElementById('status');
+    recognition.interimResults = false;
 
     if (API_KEY) document.getElementById('config-modal').style.display = 'none';
 
@@ -53,20 +50,20 @@
     }
 
     function toggleEscuta() {
-        if (!API_KEY) return;
         if (escutando) {
             escutando = false;
             recognition.stop();
             document.getElementById('btn-start').textContent = '▶ Iniciar Escuta';
-            statusText.innerText = 'Parado.';
+            document.getElementById('status').innerText = 'Parado.';
         } else {
             escutando = true;
             recognition.start();
             document.getElementById('btn-start').textContent = '■ Parar Escuta';
-            statusText.innerText = '🎙️ Escutando...';
+            document.getElementById('status').innerText = '🎙️ Ouvindo...';
         }
     }
 
+    // Reinicia automático se cair
     recognition.onend = () => { if (escutando) recognition.start(); };
 
     recognition.onresult = async (event) => {
@@ -74,28 +71,22 @@
         adicionarMensagem('Você', texto, '#adadb8');
         
         try {
-            statusText.innerText = 'IA pensando...';
-            const res = await fetch(`https://api.openai.com/v1/chat/completions`, {
+            document.getElementById('status').innerText = 'IA processando...';
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${API_KEY}`
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
                 body: JSON.stringify({
                     model: "gpt-3.5-turbo",
-                    messages: [{ role: "user", content: `O streamer disse: "${texto}". Reaja com 1 mensagem curta estilo Twitch.` }]
+                    messages: [{ role: "user", content: `O streamer disse: "${texto}". Reaja com uma mensagem curta de chat.` }]
                 })
             });
-
             const data = await res.json();
-            if (data.error) throw new Error(data.error.message);
-            
             const resposta = data.choices[0].message.content;
             adicionarMensagem('Chat', resposta, '#9146FF');
-            statusText.innerText = '🎙️ Escutando...';
+            document.getElementById('status').innerText = '🎙️ Ouvindo...';
         } catch (e) {
-            console.error("Erro OpenAI:", e);
-            statusText.innerText = 'Erro: ' + e.message;
+            document.getElementById('status').innerText = 'Erro na API';
+            console.error(e);
         }
     };
 
@@ -104,7 +95,6 @@
         div.className = 'message';
         div.innerHTML = `<span class="username" style="color:${color}">${user}:</span> ${text}`;
         document.getElementById('chat-messages').appendChild(div);
-        document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
     }
 </script>
 </body>
