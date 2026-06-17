@@ -165,6 +165,12 @@ function salvarAPI() {
 }
 
 // ─── Speech Recognition ───────────────────────────────────────
+// NOTA: Usamos continuous=false de propósito.
+// O Chrome tem um bug: com continuous=true, em páginas remotas (GitHub Pages),
+// ele dispara "network" em loop sempre que não há fala.
+// A solução é deixar cada sessão terminar naturalmente e criar um novo
+// objeto SpeechRecognition a cada ciclo — isso reseta o estado interno do Chrome.
+
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (!SpeechRecognition) {
@@ -172,82 +178,77 @@ if (!SpeechRecognition) {
     btnStart.disabled = true;
 }
 
-const recognition = new SpeechRecognition();
-recognition.continuous  = true;
-recognition.lang        = 'pt-BR';
-recognition.interimResults = false; // só resultados finais
+let recognition = null;
 
-recognition.onstart = () => {
-    reconhecendo = true;
-    console.log('[Mic] Ligado');
-    statusText.innerText = '🎙️ Escutando...';
-};
+function criarRecognition() {
+    const r = new SpeechRecognition();
+    r.continuous      = false; // uma sessão por vez — evita o bug de network loop
+    r.lang            = 'pt-BR';
+    r.interimResults  = false;
+    r.maxAlternatives = 1;
 
-recognition.onend = () => {
-    reconhecendo = false;
-    if (!escutando) {
-        statusText.innerText = 'Parado.';
-        return;
-    }
-    // Reinicia com delay para evitar o loop de erro "network"
-    console.log('[Mic] Reiniciando em 800ms...');
-    clearTimeout(restartTimer);
-    restartTimer = setTimeout(() => {
-        if (escutando && !reconhecendo) {
-            try { recognition.start(); } catch(e) { console.warn('[Mic] Não foi possível reiniciar:', e); }
+    r.onstart = () => {
+        reconhecendo = true;
+        statusText.innerText = '🎙️ Escutando...';
+    };
+
+    r.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript.trim();
+        console.log('[Mic] Captou:', transcript);
+        if (transcript.length > 3 && !processando) {
+            await gerarReacaoChat(transcript);
         }
-    }, 800);
-};
+    };
 
-recognition.onerror = (event) => {
-    reconhecendo = false;
-    console.warn('[Mic] Erro:', event.error);
+    r.onerror = (event) => {
+        // Com continuous=false, "no-speech" e "network" são normais — ignora
+        const normais = ['no-speech', 'network'];
+        if (!normais.includes(event.error)) {
+            console.error('[Mic] Erro:', event.error);
+            statusText.innerText = '⚠️ Erro: ' + event.error;
+            pararEscuta();
+        }
+    };
 
-    // Erros recuperáveis — silenciosos, o onend já vai reiniciar
-    const errosRecuperaveis = ['no-speech', 'network', 'audio-capture'];
-    if (errosRecuperaveis.includes(event.error)) return;
+    r.onend = () => {
+        reconhecendo = false;
+        if (!escutando) return;
+        // Aguarda 300ms e inicia uma nova sessão (novo objeto)
+        restartTimer = setTimeout(() => {
+            if (escutando) {
+                recognition = criarRecognition();
+                try { recognition.start(); } catch(e) {}
+            }
+        }, 300);
+    };
 
-    // Erros fatais
-    statusText.innerText = '⚠️ Erro no microfone: ' + event.error;
+    return r;
+}
+
+// ─── Controle de escuta ────────────────────────────────────────
+function pararEscuta() {
     escutando = false;
+    clearTimeout(restartTimer);
+    if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
     btnStart.textContent = '▶ Iniciar Escuta';
     btnStart.classList.remove('parar');
-};
-
-recognition.onresult = async (event) => {
-    const resultado = event.results[event.results.length - 1];
-    if (!resultado.isFinal) return; // ignora resultados parciais
-
-    const transcript = resultado[0].transcript.trim();
-    console.log('[Mic] Captou:', transcript);
-
-    if (transcript.length > 3 && !processando) {
-        await gerarReacaoChat(transcript);
-    }
-};
+    statusText.innerText = 'Parado.';
+}
 
 // ─── Alternar escuta (botão) ───────────────────────────────────
 function toggleEscuta() {
-    if (!GEMINI_API_KEY) {
-        modal.style.display = 'flex';
-        return;
-    }
+    if (!GEMINI_API_KEY) { modal.style.display = 'flex'; return; }
 
     if (escutando) {
-        // Parar
-        escutando = false;
-        clearTimeout(restartTimer);
-        try { recognition.stop(); } catch(e) {}
-        btnStart.textContent = '▶ Iniciar Escuta';
-        btnStart.classList.remove('parar');
-        statusText.innerText = 'Parado.';
+        pararEscuta();
     } else {
-        // Iniciar — só chama .start() se não estiver já rodando
         escutando = true;
         btnStart.textContent = '■ Parar Escuta';
         btnStart.classList.add('parar');
-        if (!reconhecendo) {
-            try { recognition.start(); } catch(e) { console.warn('[Mic] Erro ao iniciar:', e); }
+        recognition = criarRecognition();
+        try { recognition.start(); } catch(e) {
+            console.error('[Mic] Não foi possível iniciar:', e);
+            pararEscuta();
         }
     }
 }
