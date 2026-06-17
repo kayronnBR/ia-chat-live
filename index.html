@@ -48,13 +48,15 @@
     </div>
 
     <script>
-        // Carrega a chave do cache
         let GEMINI_API_KEY = localStorage.getItem('GEMINI_API_KEY');
         const modal = document.getElementById('config-modal');
         const statusText = document.getElementById('status');
         const chatMessages = document.getElementById('chat-messages');
+        const btnStart = document.getElementById('btn-start');
 
-        // Se já houver chave salva, remove o modal
+        // Variável de controle
+        let isListening = false;
+
         if (GEMINI_API_KEY) modal.style.display = 'none';
 
         function salvarAPI() {
@@ -62,8 +64,6 @@
             if (key) {
                 localStorage.setItem('GEMINI_API_KEY', key);
                 location.reload();
-            } else {
-                alert("Cole uma chave válida!");
             }
         }
 
@@ -72,14 +72,37 @@
         recognition.continuous = true;
         recognition.lang = 'pt-BR';
 
+        // Função principal agora funciona como um interruptor
         function iniciarEscuta() {
             if (!GEMINI_API_KEY) {
                 alert("Configure a API primeiro!");
                 return;
             }
-            recognition.start();
-            statusText.innerText = "Escutando... 🎙️";
+
+            if (isListening) {
+                // Se já estiver escutando, para
+                recognition.stop();
+            } else {
+                // Se não estiver, inicia
+                recognition.start();
+            }
         }
+
+        // Feedback visual quando o reconhecimento liga
+        recognition.onstart = () => {
+            isListening = true;
+            statusText.innerText = "Escutando... 🎙️";
+            btnStart.innerText = "Parar Escuta";
+            btnStart.style.backgroundColor = "#ff4500"; // Muda para cor de "parar"
+        };
+
+        // Feedback visual quando o reconhecimento desliga
+        recognition.onend = () => {
+            isListening = false;
+            statusText.innerText = "Parado.";
+            btnStart.innerText = "Iniciar Escuta";
+            btnStart.style.backgroundColor = "#9146FF"; // Volta para cor original
+        };
 
         recognition.onresult = async (event) => {
             const transcript = event.results[event.results.length - 1][0].transcript.trim();
